@@ -1,0 +1,11 @@
+{
+  "domain": "watr",
+  "name": "Watr",
+  "codeowners": [],
+  "dependencies": [],
+  "documentation": "peasenet.com",
+  "iot_class": "local_polling",
+  "requirements": ["requests","watr==0.0.1","aiohttp"],
+  "version": "0.1.0",
+  "config_flow": true
+}
