@@ -11,7 +11,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, DEVICE_MANUFACTURER, DEVICE_MODEL, SW_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ class WatrZoneSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self._zone = zone
         self._attr_is_on = self._zone.is_on
+        self._attr_unique_id = f"watr_zone_{self._zone.id}"
 
     @property
     def name(self):
@@ -46,6 +47,10 @@ class WatrZoneSwitch(CoordinatorEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         return self._attr_is_on
+
+    @property
+    def icon(self) -> str | None:
+        return "mdi:sprinkler-variant"
 
     async def async_turn_on(self, **kwargs):
         self._attr_is_on = True
@@ -72,12 +77,25 @@ class WatrZoneSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_is_on = self._zone.is_on
         self.async_write_ha_state()
 
+    @property
+    def device_info(self) -> DeviceInfo:
+        zone_name = f"watr_zone_{self._zone.id}"
+        return DeviceInfo(
+            identifiers={(DOMAIN, zone_name)},
+            name=self._zone.name,
+            manufacturer=DEVICE_MANUFACTURER,
+            model=DEVICE_MODEL,
+            sw_version=SW_VERSION,
+            via_device=(DOMAIN, f"watr_system_{self._zone.system_id}"),
+        )
+
 
 class WatrSystemSwitch(CoordinatorEntity, SwitchEntity):
     def __init__(self, coordinator, system):
         super().__init__(coordinator)
         self._system = system
         self._attr_is_on = self._system.enabled
+        self._attr_unique_id = f"watr_system_{self._system.id}"
 
     @property
     def name(self):
@@ -100,13 +118,19 @@ class WatrSystemSwitch(CoordinatorEntity, SwitchEntity):
         self.async_write_ha_state()
 
     @property
+    def icon(self) -> str | None:
+        return "mdi:electric-switch"
+
+    @property
     def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self.id)},
-            "name": self._system.name,
-            "manufacturer": "Watr",
-            "model": "Sprinkler System",
-        }
+        system_id_str = f"watr_system_{self._system.id}"
+        return DeviceInfo(
+            identifiers={(DOMAIN, system_id_str)},
+            name=self._system.name,
+            manufacturer=DEVICE_MANUFACTURER,
+            model=DEVICE_MODEL,
+            sw_version=SW_VERSION,
+        )
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -119,12 +143,3 @@ class WatrSystemSwitch(CoordinatorEntity, SwitchEntity):
         _LOGGER.debug("Coordinator updated")
         # self._system.data["enabled"] = self._attr_is_on
         self.async_write_ha_state()
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return {
-            "identifiers": {(DOMAIN, self._system.id)},
-            "name": self._system.name,
-            "manufacturer": "Watr",
-            "model": "Sprinkler System",
-        }

@@ -1,1 +1,4 @@
 DOMAIN = "watr"
+DEVICE_MANUFACTURER = "Watr"
+DEVICE_MODEL = "Sprinkler System"
+SW_VERSION = "1.0.0"

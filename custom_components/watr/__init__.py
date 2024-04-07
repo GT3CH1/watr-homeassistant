@@ -5,8 +5,9 @@ from homeassistant.const import Platform
 from .const import DOMAIN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, CoordinatorEntity
+from homeassistant.helpers import device_registry
 
-from watr import WatrApi, WatrSystem
+from watr import WatrApi, WatrSystem, WatrEntity
 from datetime import timedelta
 from pathlib import Path
 import json
@@ -19,16 +20,42 @@ PLATFORMS = [
 ]
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    def token_refresh_listener(data: dict):
-        p = Path(__file__).with_name("tokens.json")
-        with open(p, "w") as f:
-            f.write(json.dumps(data))
-        _LOGGER.debug("Token refreshed!")
+@callback
+def get_device_id(device: WatrEntity) -> tuple[str, str]:
+    """Get device registry identifier for device."""
+    return (
+        DOMAIN, f"{device.id}",
+    )
 
+
+def token_refresh_listener(data: dict):
+    p = Path(__file__).with_name("tokens.json")
+    with open(p, "w") as f:
+        f.write(json.dumps(data))
+    _LOGGER.debug("Token refreshed!")
+
+
+async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
+    @callback
+    def async_on_device_deleted(device: WatrEntity) -> None:
+        _LOGGER.debug("Device deleted: %s", device)
+        device = dev_reg.async_get_device({get_device_id(device)})
+        if device:
+            dev_reg.async_remove_device(device.id)
+    dev_reg = device_registry.async_get(hass)
     username = config_entry.data["email"]
     password = config_entry.data["password"]
+    force_update = False
+    try:
+        force_update = config_entry.data["force_update"]
+    except KeyError:
+        pass
     watrApi = None
+    if force_update:
+        # remove tokens file
+        p = Path(__file__).with_name("tokens.json")
+        with open(p, "w") as f:
+            f.write("")
     try:
         _LOGGER.debug("Trying to use tokens!")
         p = Path(__file__).with_name("tokens.json")
@@ -43,40 +70,31 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
         _LOGGER.error(f"Failed to use tokens! - {e}")
         _LOGGER.debug("Using username and password!")
         watrApi = WatrApi(username, password)
-        watrApi.on("token_refresh", token_refresh_listener)
         await watrApi.authenticate()
     _LOGGER.debug("Authenticated!")
     watr_system = WatrSystem(await watrApi.get_all_systems(), watrApi)
     _LOGGER.debug(f"Got all systems! {watr_system.data}")
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = MyCoordinator(hass, watr_system, 10)
-    config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
+    # config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
     _LOGGER.debug("Setting up platforms")
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
     watrApi.on("token_refresh", token_refresh_listener)
     _LOGGER.debug("Platforms set up!")
     await watr_system.api.refresh_token()
+    stored_devices = device_registry.async_entries_for_config_entry(
+        dev_reg, config_entry.entry_id
+    )
+    systems = watr_system.sprinkler_systems
+    zones = [zone for system in systems for zone in system.zones]
+    all_devices = systems + zones
+    known_devices = [
+        dev_reg.async_get_device({get_device_id(device)}) for device in all_devices
+    ]
+
+    for device in known_devices:
+        if device not in known_devices:
+            dev_reg.async_remove_device(device.id)
     return True
-
-
-async def update_listener(hass, entry):
-    _LOGGER.debug("Received an update!")
-    username = entry.options.data["username"]
-    password = entry.options.data["password"]
-    accessToken = entry.options.data["accessToken"]
-    refreshToken = entry.options.data["refreshToken"]
-
-    if accessToken and refreshToken:
-        _LOGGER.debug("Using tokens!")
-        watr_api = WatrApi(accessToken=accessToken, refreshToken=refreshToken)
-        await watr_api.refresh_token()
-    else:
-        _LOGGER.debug("Using username and password!")
-        watr_api = WatrApi(username, password)
-        await watr_api.login()
-    _data = await watr_api.get_all_systems()
-    watr_system = WatrSystem(_data, watr_api)
-    sys = MyCoordinator(hass, watr_system, 10)
-    hass.data[DOMAIN][entry.entry_id] = watr_system
 
 
 class MyCoordinator(DataUpdateCoordinator):

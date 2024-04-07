@@ -1,0 +1,19 @@
+{
+    "title": "Watr",
+    "config": {
+        "step": {
+            "user": {
+                "title": "Watr",
+                "data": {
+                    "email": "Email",
+                    "password": "Password"
+                }
+            }
+        },
+        "error": {
+            "bad_host": "Invalid hostname",
+            "bad_interval": "Invalid interval",
+            "cannot_connect": "Cannot fetch zones"
+        }
+    },
+}
