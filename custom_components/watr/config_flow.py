@@ -29,7 +29,7 @@ class SqlSprinklerConfigFlow(ConfigFlow, domain=DOMAIN):
             _res = {
                 "email": info["email"],
                 "password": info["password"],
-                "force_update": True
+                "force_update": False
             }
             return self.async_create_entry(title="Watr", data=_res)
         return self.async_show_form(
