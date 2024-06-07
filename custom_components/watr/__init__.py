@@ -12,6 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 import json
 import logging
+import aiofiles
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,10 +29,10 @@ def get_device_id(device: WatrEntity) -> tuple[str, str]:
     )
 
 
-def token_refresh_listener(data: dict):
+async def token_refresh_listener(data: dict):
     p = Path(__file__).with_name("tokens.json")
-    with open(p, "w") as f:
-        f.write(json.dumps(data))
+    async with aiofiles.open(p, "w") as f:
+        await f.write(json.dumps(data))
     _LOGGER.debug("Token refreshed!")
 
 
@@ -45,6 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     dev_reg = device_registry.async_get(hass)
     username = config_entry.data["email"]
     password = config_entry.data["password"]
+    _LOGGER.debug(f"Config data: {config_entry.data}")
     force_update = False
     try:
         force_update = config_entry.data["force_update"]
@@ -53,14 +55,18 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     watrApi = None
     if force_update:
         # remove tokens file
+        _LOGGER.debug("Force update true, removing tokens.json")
         p = Path(__file__).with_name("tokens.json")
-        with open(p, "w") as f:
-            f.write("")
+        async with aiofiles.open(p, "w") as f:
+            await f.write("")
     try:
         _LOGGER.debug("Trying to use tokens!")
         p = Path(__file__).with_name("tokens.json")
-        with open(p, "r") as f:
-            data = json.load(f)
+        async with aiofiles.open(p, "r") as f:
+            file_data = await f.read()
+            _LOGGER.debug(f"Data from file: {file_data}")
+            data = json.loads(file_data)
+            _LOGGER.debug(f"Tokens: {data}")
             accessToken = data["accessToken"]
             refreshToken = data["refreshToken"]
             _LOGGER.debug("Using tokens!")
